@@ -1,0 +1,376 @@
+---
+title: "BATS_CTDProfiles_Climatology"
+author: "Jill Paquette"
+date: "2025-02-18"
+output: html_document
+---
+
+```{r}
+#load in libraries
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(gridExtra)
+```
+
+```{r}
+#load in file
+ctd = read_csv('3918_v8_bats_ctd.csv') #version 8 of CTD Profiles dataset from BCO-DMO
+ctd_filtered = ctd %>%
+  filter(!is.na(Depth)) %>% #remove any samples with NA in depth
+  select(ISO_DateTime_UTC_deployed, ISO_DateTime_UTC_recovered, Latitude_deployed, Longitude_deployed, Latitude_recovered, Longitude_recovered, Depth, Pressure, Temperature, Salinity, Oxygen, BAC, Flu, PAR) %>% #relevant columns
+  rename(DateTime_deployed = ISO_DateTime_UTC_deployed) %>%
+  rename(DateTime_recovered = ISO_DateTime_UTC_recovered) %>%
+  rename(Beam_attenuation_coeff = BAC) %>%
+  rename(Fluoresence = Flu) %>%
+  rename(PhotosynActRadi = PAR) %>% #rename a bunch of variables
+  mutate(Year_deployed = year(DateTime_deployed), 
+         Year_recovered = year(DateTime_recovered),
+         Month_deployed = month(DateTime_deployed),
+         Month_recovered = month(DateTime_recovered),
+         Day_deployed = day(DateTime_deployed),
+         Day_recovered = day(DateTime_recovered),
+         DayofYear_deployed = yday(DateTime_deployed),
+         DayofYear_recovered = yday(DateTime_recovered),
+         Time_deployed = format(DateTime_deployed, '%H:%M:%S'),
+         Time_recovered = format(DateTime_recovered, '%H:%M:%S')) %>% #create new columns based on datetime provided (year, month, day, doy, time)
+  select(DateTime_deployed, DateTime_recovered, Month_deployed, Month_recovered, Day_deployed, Day_recovered, DayofYear_deployed, DayofYear_recovered, Year_deployed, Year_recovered, Time_deployed, Time_recovered, everything()) #reorder columns
+
+ctd_surface = ctd_filtered %>%
+  filter(Depth < 100) #filter just surface ocean, shallower than 100 m
+
+ctd_surface_88to98 = ctd_surface %>%
+  filter(between(Year_deployed, 1988, 1998)) #first decade
+ctd_surface_98to08 = ctd_surface %>%
+  filter(between(Year_deployed, 1998, 2008)) #second decade
+ctd_surface_08to18 = ctd_surface %>%
+  filter(between(Year_deployed, 2008, 2018)) #third decade
+ctd_surface_18to23 = ctd_surface %>%
+  filter(between(Year_deployed, 2018, 2023)) #fourth decade
+
+ctd_deep = ctd_filtered %>%
+  filter(Depth > 100) #filter just deep ocean, deeper than 100 m
+```
+
+```{r}
+#temperature vs depth
+ggplot(ctd_filtered, aes(x = Temperature, y = Depth)) + 
+  geom_point(size = 0.0005) +
+  theme_classic() + 
+  scale_y_reverse() + #reverse y axis so surface depth is at the top
+  labs(x = 'Temperature', y = 'Depth')
+```
+
+```{r}
+#salinity vs depth
+ggplot(ctd_filtered, aes(x = Salinity, y = Depth)) + 
+  geom_point(size = 0.0005) +
+  theme_classic() + 
+  scale_y_reverse() + #reverse y axis so surface depth is at the top
+  labs(x = 'Salinity', y = 'Depth')
+```
+
+```{r}
+#temperature over time (ymd) - surface
+ggplot(ctd_surface, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_line() +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature') +
+  stat_smooth(method = 'lm', 
+              formula = y ~ x,  
+              geom = 'smooth') #look at overall trend
+#ggsave('surface_temp_trend.png')
+```
+```{r}
+#detrending all the data
+ctd_surface_cl = ctd_surface %>%
+  filter(!is.na(Temperature))
+
+Temp_model = lm(Temperature ~ DateTime_deployed, data = ctd_surface_cl) 
+ctd_surface_cl$Predicted_temp = predict(Temp_model)
+ctd_surface_cl$Detrended_temp = ctd_surface_cl$Temperature - ctd_surface_cl$Predicted_temp #linear regression, subtract mean to detrend
+
+ggplot(ctd_surface_cl, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_line() +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, All') +
+  stat_smooth(method = 'lm', 
+              formula = y ~ x,  
+              geom = 'smooth') #same as above graph
+
+ggplot(ctd_surface_cl, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_line(color = 'black') +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, All') +
+  stat_smooth(method = 'lm', formula = y ~ x, geom = 'smooth', color = 'blue') +
+  geom_line(aes(y = Detrended_temp), color = 'purple') #plot both
+
+ggplot(ctd_surface_cl, aes(x = DateTime_deployed, y = Detrended_temp)) + 
+  geom_line(color = 'purple') +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Detrended Temperature', title = 'Surface Ocean, above 100m, All') + 
+  geom_line(aes(y = 0), color = 'black') #plot just detrended
+```
+
+```{r}
+#detrend by season - fall - same method as overall
+ctd_surface_cl_fall = ctd_surface_cl %>%
+  filter(Month_deployed == 9 | Month_deployed == 10 | Month_deployed == 11)
+Temp_model_fall = lm(Temperature ~ DateTime_deployed, data = ctd_surface_cl_fall)
+ctd_surface_cl_fall$Predicted_temp = predict(Temp_model_fall)
+ctd_surface_cl_fall$Detrended_temp = ctd_surface_cl_fall$Temperature - ctd_surface_cl_fall$Predicted_temp
+
+ggplot(ctd_surface_cl_fall, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Fall only') +
+  stat_smooth(method = 'lm', 
+              formula = y ~ x,  
+              geom = 'smooth')
+
+ggplot(ctd_surface_cl_fall, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Fall only') +
+  stat_smooth(method = 'lm', formula = y ~ x, geom = 'smooth', color = 'blue') +
+  geom_point(aes(y = Detrended_temp), color = 'purple', size = 0.1)
+
+ggplot(ctd_surface_cl_fall, aes(x = DateTime_deployed, y = Detrended_temp)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Detrended Temperature', title = 'Surface Ocean, above 100m, Fall only') + 
+  geom_line(aes(y = 0), color = 'black')
+```
+
+```{r}
+#detrend by season - winter - same method as overall
+ctd_surface_cl_winter = ctd_surface_cl %>%
+  filter(Month_deployed == 12 | Month_deployed == 1 | Month_deployed == 2)
+Temp_model_winter = lm(Temperature ~ DateTime_deployed, data = ctd_surface_cl_winter)
+ctd_surface_cl_winter$Predicted_temp = predict(Temp_model_winter)
+ctd_surface_cl_winter$Detrended_temp = ctd_surface_cl_winter$Temperature - ctd_surface_cl_winter$Predicted_temp
+
+ggplot(ctd_surface_cl_winter, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Winter only') +
+  stat_smooth(method = 'lm', 
+              formula = y ~ x,  
+              geom = 'smooth')
+
+ggplot(ctd_surface_cl_winter, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Winter only') +
+  stat_smooth(method = 'lm', formula = y ~ x, geom = 'smooth', color = 'blue') +
+  geom_point(aes(y = Detrended_temp), color = 'purple', size = 0.1)
+
+ggplot(ctd_surface_cl_winter, aes(x = DateTime_deployed, y = Detrended_temp)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Detrended Temperature', title = 'Surface Ocean, above 100m, Winter only') + 
+  geom_line(aes(y = 0), color = 'black')
+#ggsave('surface_temp_winter_detrend.png')
+```
+
+```{r}
+#detrend by season - spring - same method as overall
+ctd_surface_cl_spring = ctd_surface_cl %>%
+  filter(Month_deployed == 3 | Month_deployed == 4 | Month_deployed == 5)
+Temp_model_spring = lm(Temperature ~ DateTime_deployed, data = ctd_surface_cl_spring)
+ctd_surface_cl_spring$Predicted_temp = predict(Temp_model_spring)
+ctd_surface_cl_spring$Detrended_temp = ctd_surface_cl_spring$Temperature - ctd_surface_cl_spring$Predicted_temp
+
+ggplot(ctd_surface_cl_spring, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Spring only') +
+  stat_smooth(method = 'lm', 
+              formula = y ~ x,  
+              geom = 'smooth')
+
+ggplot(ctd_surface_cl_spring, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Spring only') +
+  stat_smooth(method = 'lm', formula = y ~ x, geom = 'smooth', color = 'blue') +
+  geom_point(aes(y = Detrended_temp), color = 'purple', size = 0.1)
+
+ggplot(ctd_surface_cl_spring, aes(x = DateTime_deployed, y = Detrended_temp)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Detrended Temperature', title = 'Surface Ocean, above 100m, Spring only') + 
+  geom_line(aes(y = 0), color = 'black')
+
+```
+
+```{r}
+#detrend by season - summer - same method as overall
+ctd_surface_cl_summer = ctd_surface_cl %>%
+  filter(Month_deployed == 6 | Month_deployed == 7 | Month_deployed == 8)
+Temp_model_summer = lm(Temperature ~ DateTime_deployed, data = ctd_surface_cl_summer)
+ctd_surface_cl_summer$Predicted_temp = predict(Temp_model_summer)
+ctd_surface_cl_summer$Detrended_temp = ctd_surface_cl_summer$Temperature - ctd_surface_cl_summer$Predicted_temp
+
+ggplot(ctd_surface_cl_summer, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Summer only') +
+  stat_smooth(method = 'lm', 
+              formula = y ~ x,  
+              geom = 'smooth')
+
+ggplot(ctd_surface_cl_summer, aes(x = DateTime_deployed, y = Temperature)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Temperature', title = 'Surface Ocean, above 100m, Summer only') +
+  stat_smooth(method = 'lm', formula = y ~ x, geom = 'smooth', color = 'blue') +
+  geom_point(aes(y = Detrended_temp), color = 'purple', size = 0.1)
+
+ggplot(ctd_surface_cl_summer, aes(x = DateTime_deployed, y = Detrended_temp)) + 
+  geom_point(size = 0.1) +
+  theme_classic() + 
+  labs(x = 'Date/Time CTD Deployed', y = 'Detrended Temperature', title = 'Surface Ocean, above 100m, Summer only') + 
+  geom_line(aes(y = 0), color = 'black')
+
+```
+
+```{r}
+ctd_surface$Year_deployed = as.factor(ctd_surface$Year_deployed) #group together years so legend works properly
+ctd_surface_88to98$Year_deployed = as.factor(ctd_surface_88to98$Year_deployed) #group together years so legend works properly
+ctd_surface_98to08$Year_deployed = as.factor(ctd_surface_98to08$Year_deployed) #group together years so legend works properly
+ctd_surface_08to18$Year_deployed = as.factor(ctd_surface_08to18$Year_deployed) #group together years so legend works properly
+ctd_surface_18to23$Year_deployed = as.factor(ctd_surface_18to23$Year_deployed) #group together years so legend works properly
+
+#temperature over time (doy) - all time-series (surface)
+ ggplot(ctd_surface, aes(x = DayofYear_deployed, y = Temperature, color = Year_deployed)) +
+   geom_line() +
+   scale_color_viridis_d(option = 'viridis') +
+   theme_classic() +
+   labs(x = 'Day of Year Deployed', y = 'Temperature') +
+   scale_x_continuous(limits = c(0, 366)) + scale_y_continuous(limits = c(18, 30))
+
+#first decade (1988-1998)
+ ggplot(ctd_surface_88to98, aes(x = DayofYear_deployed, y = Temperature, color = Year_deployed)) +
+   geom_line() +
+   scale_color_viridis_d(option = 'viridis') +
+   theme_classic() +
+   labs(x = 'Day of Year Deployed (1988-1998)', y = 'Temperature') +
+   scale_x_continuous(limits = c(0, 366)) + scale_y_continuous(limits = c(18, 30))
+
+ #second decade (1998-2008)
+ ggplot(ctd_surface_98to08, aes(x = DayofYear_deployed, y = Temperature, color = Year_deployed)) +
+   geom_line() +
+   scale_color_viridis_d(option = 'viridis') +
+   theme_classic() +
+   labs(x = 'Day of Year Deployed (1998-2008)', y = 'Temperature') +
+   scale_x_continuous(limits = c(0, 366)) + scale_y_continuous(limits = c(18, 30))
+
+#third decade (2008-2018)
+ ggplot(ctd_surface_08to18, aes(x = DayofYear_deployed, y = Temperature, color = Year_deployed)) +
+   geom_line() +
+   scale_color_viridis_d(option = 'viridis') +
+   theme_classic() +
+    labs(x = 'Day of Year Deployed (2008-2018)', y = 'Temperature') +
+    scale_x_continuous(limits = c(0, 366)) + scale_y_continuous(limits = c(18, 30))
+
+#fourth decade (2018-2023)
+ ggplot(ctd_surface_18to23, aes(x = DayofYear_deployed, y = Temperature, color = Year_deployed)) +
+   geom_line() +
+   scale_color_viridis_d(option = 'viridis') +
+   theme_classic() +
+   labs(x = 'Day of Year Deployed (2018-2023)', y = 'Temperature') +
+   scale_x_continuous(limits = c(0, 366)) + scale_y_continuous(limits = c(18, 30))
+```
+
+```{r}
+#temperature vs salinity - all time-series (surface)
+ggplot(ctd_surface, aes(x = Salinity, y = Temperature, color = Year_deployed)) + 
+  geom_point((aes(color = Year_deployed)), size = 0.1) +
+  scale_color_viridis_d(option = 'viridis') +
+  theme_classic() + 
+  labs(x = 'Salinity', y = 'Temperature') + 
+  scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#first decade (1988-1998)
+ggplot(ctd_surface_88to98, aes(x = Salinity, y = Temperature, color = Year_deployed)) + 
+  geom_point((aes(color = Year_deployed)), size = 0.1) +
+  scale_color_viridis_d(option = 'viridis') +
+  theme_classic() + 
+  labs(x = 'Salinity', y = 'Temperature', title = '1988-1998') + 
+  scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#second decade (1998-2008)
+ggplot(ctd_surface_98to08, aes(x = Salinity, y = Temperature, color = Year_deployed)) + 
+  geom_point((aes(color = Year_deployed)), size = 0.1) +
+  scale_color_viridis_d(option = 'viridis') +
+  theme_classic() + 
+  labs(x = 'Salinity', y = 'Temperature', title = '1998-2008') + 
+  scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#third decade (2008-2018)
+ggplot(ctd_surface_08to18, aes(x = Salinity, y = Temperature, color = Year_deployed)) + 
+  geom_point((aes(color = Year_deployed)), size = 0.1) +
+  scale_color_viridis_d(option = 'viridis') +
+  theme_classic() + 
+  labs(x = 'Salinity', y = 'Temperature', title = '2008-2018') + 
+  scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#fourth decade (2018-2023)
+ggplot(ctd_surface_18to23, aes(x = Salinity, y = Temperature, color = Year_deployed)) + 
+  geom_point((aes(color = Year_deployed)), size = 0.1) +
+  scale_color_viridis_d(option = 'viridis') +
+  theme_classic() + 
+  labs(x = 'Salinity', y = 'Temperature', title = '2018-2023') + 
+  scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+```
+
+```{r}
+#temperature across latitudes - all time-series (surface)
+ggplot(ctd_surface, aes(x = Longitude_deployed, y = Latitude_deployed, color = Temperature)) + 
+  geom_point(size = 0.1) +
+  scale_color_viridis(option = 'magma') +
+  theme_classic() + 
+  labs(x = 'Longitude', y = 'Latitude') #+ 
+  #scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#first decade (1988-1998)
+ggplot(ctd_surface_88to98, aes(x = Longitude_deployed, y = Latitude_deployed, color = Temperature)) + 
+  geom_point(size = 0.1) +
+  scale_color_viridis(option = 'magma') +
+  theme_classic() + 
+  labs(x = 'Longitude', y = 'Latitude') #+ 
+  #scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#second decade (1998-2008)
+ggplot(ctd_surface_98to08, aes(x = Longitude_deployed, y = Latitude_deployed, color = Temperature)) + 
+  geom_point(size = 0.1) +
+  scale_color_viridis(option = 'magma') +
+  theme_classic() + 
+  labs(x = 'Longitude', y = 'Latitude') #+ 
+  #scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#third decade (2008-2018)
+ggplot(ctd_surface_08to18, aes(x = Longitude_deployed, y = Latitude_deployed, color = Temperature)) + 
+  geom_point(size = 0.1) +
+  scale_color_viridis(option = 'magma') +
+  theme_classic() + 
+  labs(x = 'Longitude', y = 'Latitude') #+ 
+  #scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+
+#fourth decade (2018-2023)
+ggplot(ctd_surface_18to23, aes(x = Longitude_deployed, y = Latitude_deployed, color = Temperature)) + 
+  geom_point(size = 0.1) +
+  scale_color_viridis(option = 'magma') +
+  theme_classic() + 
+  labs(x = 'Longitude', y = 'Latitude') #+ 
+  #scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
+```
+
+
+
+
+
+
+
+
