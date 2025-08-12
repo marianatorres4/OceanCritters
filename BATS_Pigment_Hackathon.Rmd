@@ -1,0 +1,151 @@
+---
+title: "BATS_Pigments_Hackathon"
+author: "Jill Paquette"
+date: "2025-08-11"
+output: html_document
+---
+
+```{r}
+#load in libraries
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(gridExtra)
+```
+
+```{r}
+pigments = read_csv('893521_v8_bats_pigments.csv')
+```
+
+```{r}
+pig = pigments %>%
+  select(ID, ISO_DateTime_UTC, yyyymmdd, decy, time, Latitude, Longitude, Cruise_num, Cast, Cast_type, Bottle_number, Depth, p4, QF_p4, p5, QF_p5, p6, QF_p6, p7, QF_p7, p10, QF_p10, p13, QF_p13, p14, QF_p14, p19, QF_p19)
+#QF_Niskin_GoFlo and QF_depth might be good to have for later
+```
+
+```{r}
+pig_clean = pig %>%
+  filter(QF_p4 != 9 | 
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9)
+```
+
+```{r}
+pig_clean_yd = pig_clean %>%
+  mutate(year = year(ISO_DateTime_UTC),
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select(ID, ISO_DateTime_UTC, yyyymmdd, decy, time, month, day, year, yd, Latitude, Longitude, Cruise_num, Cast, Cast_type, Bottle_number, Depth, p4, QF_p4, p5, QF_p5, p6, QF_p6, p7, QF_p7, p10, QF_p10, p13, QF_p13, p14, QF_p14, p19, QF_p19)
+```
+
+```{r}
+pig_clean_group = pig_clean_yd %>%
+  group_by(month) %>% 
+  summarise(across(starts_with('p'), \(x) mean(x, na.rm = TRUE))) %>%
+  rename(peri = p4,
+         but = p5,
+         fuco = p6,
+         hexfuco = p7,
+         allo = p10,
+         chlb = p13,
+         chla = p14,
+         zea = p19) %>%
+  mutate(peri_mgm3 = peri*1025*0.000001,
+         but_mgm3 = but*1025*0.000001,
+         fuco_mgm3 = fuco*1025*0.000001,
+         hexfuco_mgm3 = hexfuco*1025*0.000001,
+         allo_mgm3 = allo*1025*0.000001,
+         chlb_mgm3 = chlb*1025*0.000001,
+         chla_mgm3 = chla*1025*0.000001,
+         zea_mgm3 = zea*1025*0.000001,
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284))
+```
+
+```{r}
+#filter for the 2 and 0.08
+pfts = pig_clean_group %>%
+  select(month) %>%
+  mutate(fproka = ((2.36*pig_clean_group$zea_mgm3)/pig_clean_group$chla_mgm3),
+         fgreenalgae = ((1.30*pig_clean_group$chlb_mgm3)/pig_clean_group$chla_mgm3),
+         fnano = ((1.07*pig_clean_group$hexfuco_mgm3+2.06*pig_clean_group$allo_mgm3+1.30*pig_clean_group$chlb_mgm3+1.27*pig_clean_group$fuco_nano_mgm3)/pig_clean_group$chla_mgm3),
+         fhapto = fnano-fgreenalgae,
+         fdiatoms = (1.27*(pig_clean_group$fuco_mgm3-pig_clean_group$fuco_nano_mgm3))/pig_clean_group$chla_mgm3) 
+```
+
+```{r}
+pig_long = pig_clean_yd %>%
+  pivot_longer(cols = starts_with('p'), 
+               names_to = 'pigment_num',
+               values_to = 'conc') %>%
+  mutate(conc_log = log2(conc))
+
+pig_long_nochl = pig_long %>%
+  filter(pigment_num != 'p14')
+
+pig_group_long = pig_clean_group %>%
+  pivot_longer(cols = starts_with('p'), 
+               names_to = 'pigment_num',
+               values_to = 'conc') %>%
+  mutate(conc_log = log2(conc))
+
+pig_group_long_nochl = pig_group_long %>%
+  filter(pigment_num != 'p14')
+
+pfts_long = pfts %>%
+  pivot_longer(cols = starts_with('f'),
+               names_to = 'pft',
+               values_to = 'ratio')
+```
+
+```{r}
+ggplot(pig_group_long, aes(x = month, y = conc)) + 
+  geom_point(aes(color = pigment_num))  +
+  labs(title = 'With Chla')
+
+ggplot(pig_group_long, aes(x = month, y = conc)) + 
+  geom_line(aes(color = pigment_num))  +
+  geom_point(aes(group = pigment_num, color = pigment_num))  +
+  labs(title = 'With Chla')
+```
+
+```{r}
+ggplot(pig_group_long_nochl, aes(x = month, y = conc)) + 
+  geom_point(aes(color = pigment_num)) +
+  labs(title = 'No Chla')
+
+ggplot(pig_group_long_nochl, aes(x = month, y = conc)) + 
+  geom_point(aes(color = pigment_num)) +
+  geom_line(aes(group = pigment_num, color = pigment_num)) +
+  labs(title = 'No Chla')
+```
+
+```{r}
+ggplot(pig_group_long_nochl, aes(x = month, y = conc_log)) + 
+  geom_line(aes(color = pigment_num)) + 
+  geom_point(aes(color = pigment_num, group = pigment_num)) +
+  labs(title = 'No Chla, log concs')
+
+ggplot(pig_group_long_nochl, aes(x = month, y = conc_log)) + 
+  geom_line(aes(color = pigment_num)) +
+  geom_point(aes(color = pigment_num, group = pigment_num)) +
+  labs(title = 'No Chla, log concs')
+```
+
+```{r}
+#small cells, may be more numerous than the proportion of pigments that they contribute
+```
+
+```{r}
+ggplot(pfts_long, aes(x = month, y = ratio)) + 
+  geom_point(aes(color = pft)) +
+  geom_line(aes(group = pft, color = pft)) +
+  labs(title = 'pfts per month')
+```
+
