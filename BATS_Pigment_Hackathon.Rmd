@@ -68,7 +68,8 @@ pig_clean_month = pig_clean_yd %>%
          chlb_mgm3 = chlb*1025*0.000001,
          chla_mgm3 = chla*1025*0.000001,
          zea_mgm3 = zea*1025*0.000001,
-         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284))
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
+  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) #but is not included because it was excluded after multiple regression analyses in the losa supplement
 ```
 
 ```{r}
@@ -100,11 +101,11 @@ ggplot(pig_clean_month_long_mgm3, aes(x = month, y = ratio)) +
 #filter for the 2 and 0.08
 pfts_month = pig_clean_month %>%
   select(month) %>%
-  mutate(fproka = ((2.36*pig_clean_month$zea_mgm3)/pig_clean_month$chla_mgm3),
-         fgreenalgae = ((1.30*pig_clean_month$chlb_mgm3)/pig_clean_month$chla_mgm3),
-         fnano = ((1.07*pig_clean_month$hexfuco_mgm3+2.06*pig_clean_month$allo_mgm3+1.30*pig_clean_month$chlb_mgm3+1.27*pig_clean_month$fuco_nano_mgm3)/pig_clean_month$chla_mgm3),
+  mutate(fproka = ((2.36*pig_clean_month$zea_mgm3)/pig_clean_month$chlaw_mgm3),
+         fgreenalgae = ((1.30*pig_clean_month$chlb_mgm3)/pig_clean_month$chlaw_mgm3),
+         fnano = ((1.07*pig_clean_month$hexfuco_mgm3+2.06*pig_clean_month$allo_mgm3+1.30*pig_clean_month$chlb_mgm3+1.27*pig_clean_month$fuco_nano_mgm3)/pig_clean_month$chlaw_mgm3),
          fhapto = fnano-fgreenalgae,
-         fdiatoms = (1.27*(pig_clean_month$fuco_mgm3-pig_clean_month$fuco_nano_mgm3))/pig_clean_month$chla_mgm3) 
+         fdiatoms = (1.27*(pig_clean_month$fuco_mgm3-pig_clean_month$fuco_nano_mgm3))/pig_clean_month$chlaw_mgm3) 
 ```
 
 ```{r}
@@ -142,22 +143,23 @@ pig_clean_day = pig_clean_yd %>%
          chlb_mgm3 = chlb*1025*0.000001,
          chla_mgm3 = chla*1025*0.000001,
          zea_mgm3 = zea*1025*0.000001,
-         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284))
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
+  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) #but is not included because it was excluded after multiple regression analyses in the losa supplement
 ```
 
 ```{r}
 pfts_day = pig_clean_day %>%
   select(yd) %>%
-  mutate(fproka = ((2.36*pig_clean_day$zea_mgm3)/pig_clean_day$chla_mgm3),
-         fgreenalgae = ((1.30*pig_clean_day$chlb_mgm3)/pig_clean_day$chla_mgm3)) %>%
+  mutate(fproka = ((2.36*pig_clean_day$zea_mgm3)/pig_clean_day$chlaw_mgm3),
+         fgreenalgae = ((1.30*pig_clean_day$chlb_mgm3)/pig_clean_day$chlaw_mgm3)) %>%
 #pig_clean_day$chla_mgm3 >= 2 all results in FALSE
 #pig_clean_day$chla_mgm3 > 0.08 & pig_clean_day$chla_mgm3 < 2 results in mostly TRUE some FALSE meaning I use the S6 equation for those
 #pig_clean_day$chla_mgm3 <= 0.08 results in mostly FALSE with some TRUE so I use S7
   mutate(fnano = case_when(
-    pig_clean_day$chla_mgm3 > 0.08 & pig_clean_day$chla_mgm3 < 2 ~ ((1.07*pig_clean_day$hexfuco_mgm3+2.06*pig_clean_day$allo_mgm3+1.30*pig_clean_day$chlb_mgm3+1.27*pig_clean_day$fuco_nano_mgm3)/pig_clean_day$chla_mgm3),
-    pig_clean_day$chla_mgm3 <= 0.08 ~ ((12.5*pig_clean_day$chla_mgm3*1.07*pig_clean_day$hexfuco_mgm3)/pig_clean_day$chla_mgm3)+(((1.07*pig_clean_day$hexfuco_mgm3)+(2.06*pig_clean_day$allo_mgm3)+(1.30*pig_clean_day$chlb_mgm3))/pig_clean_day$chla_mgm3)+((1.27*pig_clean_day$fuco_nano_mgm3)/pig_clean_day$chla_mgm3)),
+    pig_clean_day$chla_mgm3 > 0.08 & pig_clean_day$chla_mgm3 < 2 ~ ((1.07*pig_clean_day$hexfuco_mgm3+2.06*pig_clean_day$allo_mgm3+1.30*pig_clean_day$chlb_mgm3+1.27*pig_clean_day$fuco_nano_mgm3)/pig_clean_day$chlaw_mgm3),
+    pig_clean_day$chla_mgm3 <= 0.08 ~ ((12.5*pig_clean_day$chla_mgm3*1.07*pig_clean_day$hexfuco_mgm3)/pig_clean_day$chlaw_mgm3)+(((1.07*pig_clean_day$hexfuco_mgm3)+(2.06*pig_clean_day$allo_mgm3)+(1.30*pig_clean_day$chlb_mgm3))/pig_clean_day$chlaw_mgm3)+((1.27*pig_clean_day$fuco_nano_mgm3)/pig_clean_day$chlaw_mgm3)),
          fhapto = fnano-fgreenalgae,
-    fdiatoms = (1.27*(pig_clean_day$fuco_mgm3-pig_clean_day$fuco_nano_mgm3))/pig_clean_day$chla_mgm3)
+    fdiatoms = (1.27*(pig_clean_day$fuco_mgm3-pig_clean_day$fuco_nano_mgm3))/pig_clean_day$chlaw_mgm3)
 
 #diatom equation used is S10 because all chla is lower than 2 mg/m3
 ```
