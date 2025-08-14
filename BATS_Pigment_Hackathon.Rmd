@@ -48,6 +48,64 @@ pig_clean_yd = pig_clean %>%
 ```
 
 ```{r}
+#time series
+pig_clean_ts = pig_clean_yd %>%
+  group_by(ISO_DateTime_UTC) %>% 
+  summarise(across(starts_with('p'), \(x) mean(x, na.rm = TRUE))) %>%
+  rename(peri = p4,
+         but = p5,
+         fuco = p6,
+         hexfuco = p7,
+         allo = p10,
+         chlb = p13,
+         chla = p14,
+         zea = p19) %>%
+  mutate(peri_mgm3 = peri*1025*0.000001,
+         but_mgm3 = but*1025*0.000001,
+         fuco_mgm3 = fuco*1025*0.000001,
+         hexfuco_mgm3 = hexfuco*1025*0.000001,
+         allo_mgm3 = allo*1025*0.000001,
+         chlb_mgm3 = chlb*1025*0.000001,
+         chla_mgm3 = chla*1025*0.000001,
+         zea_mgm3 = zea*1025*0.000001,
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
+  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3)))
+
+pig_clean_ts_long_ngkg = pig_clean_ts %>%
+  select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3, -chlaw_mgm3, -chla) %>%
+  pivot_longer(cols = 2:8,
+               names_to = 'pigment',
+               values_to = 'ng/kg')
+
+pig_clean_ts_long_mgm3 = pig_clean_ts %>%
+  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea, -chlaw_mgm3, -chla_mgm3) %>%
+  pivot_longer(cols = 2:9,
+               names_to = 'pigment',
+               values_to = 'mg/m3')
+```
+
+```{r}
+ggplot(pig_clean_ts_long_ngkg, aes(x = ISO_DateTime_UTC, y = `ng/kg`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments ng/kg') + 
+  scale_x_datetime(
+    date_breaks = "2 month",       # monthly ticks
+    date_labels = "%b %Y"          # e.g., "Aug 2016"
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 5))
+ggplot(pig_clean_ts_long_mgm3, aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3') + 
+  scale_x_datetime(
+    date_breaks = "2 month",       # monthly ticks
+    date_labels = "%b %Y"          # e.g., "Aug 2016"
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 4))
+#add and delete chla from each to add or remove it
+```
+
+
+```{r}
 #monthly average
 pig_clean_month = pig_clean_yd %>%
   group_by(month) %>% 
@@ -77,28 +135,27 @@ pig_clean_month_long_ngkg = pig_clean_month %>%
   select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3) %>%
   pivot_longer(cols = 2:9,
                names_to = 'pigment',
-               values_to = 'ratio')
+               values_to = 'ng/kg')
 
 pig_clean_month_long_mgm3 = pig_clean_month %>%
   select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea) %>%
   pivot_longer(cols = 2:10,
                names_to = 'pigment',
-               values_to = 'ratio')
+               values_to = 'mg/m3')
 ```
 
 ```{r}
-ggplot(pig_clean_month_long_ngkg, aes(x = month, y = ratio)) + 
+ggplot(pig_clean_month_long_ngkg, aes(x = month, y = `ng/kg`)) + 
   geom_point(aes(color = pigment)) +
   geom_line(aes(group = pigment, color = pigment)) +
   labs(title = 'pigments ng/kg')
-ggplot(pig_clean_month_long_mgm3, aes(x = month, y = ratio)) + 
+ggplot(pig_clean_month_long_mgm3, aes(x = month, y = `mg/m3`)) + 
   geom_point(aes(color = pigment)) +
   geom_line(aes(group = pigment, color = pigment)) +
   labs(title = 'pigments mg/m3')
 ```
 
 ```{r}
-#filter for the 2 and 0.08
 pfts_month = pig_clean_month %>%
   select(month) %>%
   mutate(fproka = ((2.36*pig_clean_month$zea_mgm3)/pig_clean_month$chlaw_mgm3),
@@ -148,6 +205,31 @@ pig_clean_day = pig_clean_yd %>%
 ```
 
 ```{r}
+pig_clean_day_long_ngkg = pig_clean_day %>%
+  select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3) %>%
+  pivot_longer(cols = 2:9,
+               names_to = 'pigment',
+               values_to = 'ng/kg')
+
+pig_clean_day_long_mgm3 = pig_clean_day %>%
+  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea) %>%
+  pivot_longer(cols = 2:10,
+               names_to = 'pigment',
+               values_to = 'mg/m3')
+```
+
+```{r}
+ggplot(pig_clean_day_long_ngkg, aes(x = yd, y = `ng/kg`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments ng/kg')
+ggplot(pig_clean_day_long_mgm3, aes(x = yd, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3')
+```
+
+```{r}
 pfts_day = pig_clean_day %>%
   select(yd) %>%
   mutate(fproka = ((2.36*pig_clean_day$zea_mgm3)/pig_clean_day$chlaw_mgm3),
@@ -177,5 +259,25 @@ ggplot(pfts_day_long, aes(x = yd, y = ratio)) +
   geom_line(aes(group = pft, color = pft)) +
   labs(title = 'pfts per day')
 #ratio is messed up
+```
+```{r}
+library(maps)
+library(ggrepel)
+```
+
+```{r}
+#pigment on a map
+world_map = map_data('world')
+```
+
+```{r}
+ggplot() + 
+  geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill = 'lightgray', color = 'white') +
+  geom_point(data = pig_clean_yd, aes(x = Longitude, y = Latitude), size = 0.25) +
+  scale_shape_manual(values = c(2, 1)) +
+  coord_fixed(1.3, xlim = c(-70, -60), ylim = c(27, 35)) +
+  labs(title = 'BATS HPLC Pigment data', x = 'Longitude', y = 'Latitude') +
+  theme_minimal()
+```
 ```
 
