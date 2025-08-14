@@ -48,7 +48,7 @@ pig_clean_yd = pig_clean %>%
 ```
 
 ```{r}
-#daily average
+#monthly average
 pig_clean_month = pig_clean_yd %>%
   group_by(month) %>% 
   summarise(across(starts_with('p'), \(x) mean(x, na.rm = TRUE))) %>%
@@ -69,6 +69,31 @@ pig_clean_month = pig_clean_yd %>%
          chla_mgm3 = chla*1025*0.000001,
          zea_mgm3 = zea*1025*0.000001,
          fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284))
+```
+
+```{r}
+pig_clean_month_long_ngkg = pig_clean_month %>%
+  select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3) %>%
+  pivot_longer(cols = 2:9,
+               names_to = 'pigment',
+               values_to = 'ratio')
+
+pig_clean_month_long_mgm3 = pig_clean_month %>%
+  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea) %>%
+  pivot_longer(cols = 2:10,
+               names_to = 'pigment',
+               values_to = 'ratio')
+```
+
+```{r}
+ggplot(pig_clean_month_long_ngkg, aes(x = month, y = ratio)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments ng/kg')
+ggplot(pig_clean_month_long_mgm3, aes(x = month, y = ratio)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3')
 ```
 
 ```{r}
