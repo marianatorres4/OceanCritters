@@ -1,0 +1,124 @@
+---
+title: "BATS_Pigment_PigmentVal"
+author: "Jill Paquette"
+date: "2025-04-22"
+output: html_document
+---
+
+```{r}
+#load in libraries
+library(tidyverse)
+library(lubridate)
+library(viridis)
+library(gridExtra)
+```
+
+```{r}
+#load in files
+pig = read_csv('893521_v7_bats_pigments.csv')
+val = read_csv('926534_v6_bats_bval_pigments.csv')
+```
+
+```{r}
+pig_p_long = pig %>%
+  select(-starts_with('QF_p')) %>%
+  pivot_longer(cols = starts_with('p') & !starts_with('QF_p'),
+               names_to = 'pigment_num',
+               values_to = 'count')
+
+pig_qf_long = pig %>%
+  select(-starts_with('p')) %>%
+  pivot_longer(cols = starts_with('QF_p'),
+               names_to = 'pigment_num',
+               names_prefix = 'QF',
+               values_to = 'QF_num') %>%
+  mutate(pigment_num = str_remove(pigment_num, '^_'))
+
+pig_long = left_join(pig_p_long, pig_qf_long, by = c('ID', 'ISO_DateTime_UTC', 'Vessel', 'Latitude', 'Longitude', 'Cruise_type', 'Cruise_num', 'Cast', 'Cast_type', 'Bottle_number', 'QF_Niskin_GoFlo', 'Depth', 'QF_depth', 'pigment_num', 'yyyymmdd', 'decy', 'time'))
+```
+
+```{r}
+pig_clean = pig_long %>%
+  filter(QF_num != 9) %>%
+  filter(QF_num != 3) %>%
+  mutate(year = year(ISO_DateTime_UTC),
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select('ID', 'ISO_DateTime_UTC', 'year', 'month', 'day', 'yd', everything()) %>%
+  filter(pigment_num == 'p4' | pigment_num == 'p5' | pigment_num == 'p6'| pigment_num == 'p7' | pigment_num == 'p8' | pigment_num == 'p9' | pigment_num == 'p10' | pigment_num == 'p11' | pigment_num == 'p19')
+```
+
+```{r}
+ggplot(pig_clean, aes(x = month, y = count, fill = pigment_num)) + 
+  geom_bar(stat = 'identity') + 
+  scale_fill_viridis_d() +
+  scale_x_continuous(breaks = 1:12)
+```
+```{r}
+pig_clean_num = pig %>%
+  select(starts_with('p'))
+pig_clean_num[is.na(pig_clean_num)] = 0
+pig_clean_num = as.data.frame(pig_clean_num)
+rownames(pig_clean_num) = pig$ID
+
+pig_clean_col_tot = pig_clean_num %>%
+  summarize(across(where(is.numeric), ~ sum(., na.rm = TRUE)))
+pig_clean_col_tot = as.vector(pig_clean_col_tot)
+pig_clean_col_tot = unlist(pig_clean_col_tot)
+```
+
+```{r}
+pig_clean_norm = sweep(pig_clean_num, 2, pig_clean_col_tot, FUN = '/')
+
+names(pig_clean_norm) = paste0(names(pig_clean_norm), '_norm')
+
+pig_clean_norm$ID = rownames(pig_clean_norm)
+pig_clean_norm$ID = as.numeric(pig_clean_norm$ID)
+pig_clean_norm = pig_clean_norm %>%
+  select(ID, everything())
+```
+
+```{r}
+pig_clean_norm_full = full_join(pig_clean_norm, pig, by = 'ID') %>%
+  select(ID, ISO_DateTime_UTC, Vessel, Latitude, Longitude, Cruise_type, Cruise_num, Cast, Cast_type, Bottle_number, QF_Niskin_GoFlo, Depth, QF_depth, yyyymmdd, decy, time, everything())
+```
+
+```{r}
+pig_p_norm_long = pig_clean_norm_full %>%
+  select(-starts_with('QF_p')) %>%
+  pivot_longer(cols = starts_with('p') & !starts_with('QF_p'),
+               names_to = 'pigment_num',
+               values_to = 'count')
+
+pig_qf_norm_long = pig_clean_norm_full %>%
+  select(-starts_with('p')) %>%
+  pivot_longer(cols = starts_with('QF_p'),
+               names_to = 'pigment_num',
+               names_prefix = 'QF',
+               values_to = 'QF_num') %>%
+  mutate(pigment_num = str_remove(pigment_num, '^_'))
+
+pig_norm_long = left_join(pig_p_norm_long, pig_qf_norm_long, by = c('ID', 'ISO_DateTime_UTC', 'Vessel', 'Latitude', 'Longitude', 'Cruise_type', 'Cruise_num', 'Cast', 'Cast_type', 'Bottle_number', 'QF_Niskin_GoFlo', 'Depth', 'QF_depth', 'pigment_num', 'yyyymmdd', 'decy', 'time'))
+pig_norm_long$QF_num[is.na(pig_norm_long$QF_num)] = 10
+
+pig_norm_clean = pig_norm_long %>%
+  filter(QF_num != 9) %>%
+  filter(QF_num != 3) %>%
+  mutate(year = year(ISO_DateTime_UTC),
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select('ID', 'ISO_DateTime_UTC', 'year', 'month', 'day', 'yd', everything())
+
+pig_norm_clean_normonly = pig_norm_clean %>%
+  filter(QF_num == 10)
+```
+
+```{r}
+ggplot(pig_norm_clean_normonly, aes(x = month, y = count, fill = pigment_num)) + 
+  geom_bar(stat = 'identity') + 
+  scale_fill_viridis_d() +
+  scale_x_continuous(breaks = 1:12)
+```
+

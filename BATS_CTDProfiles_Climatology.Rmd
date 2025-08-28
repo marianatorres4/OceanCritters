@@ -367,7 +367,31 @@ ggplot(ctd_surface_18to23, aes(x = Longitude_deployed, y = Latitude_deployed, co
   #scale_x_continuous(limits = c(36, 38)) + scale_y_continuous(limits = c(18, 30))
 ```
 
+```{r}
+ctd_temp = ctd %>%
+  filter(!is.na(Temperature)) %>%
+  filter(QF_Temperature == 2)
+```
 
+```{r}
+min(ctd_temp$Temperature)
+max(ctd_temp$Temperature)
+mean(ctd_temp$Temperature)
+```
+
+```{r}
+get_mode <- function(x) {
+  uniq_vals <- unique(x)
+  uniq_vals[which.max(tabulate(match(x, uniq_vals)))]
+}
+
+get_mode(ctd_temp$Temperature)
+
+```
+
+```{r}
+hist(ctd_temp$Temperature, xlim = c(0, 35))
+```
 
 
 
