@@ -35,7 +35,85 @@ pig_clean = pig %>%
            QF_p13 != 9 |
            QF_p14 != 9 |
            QF_p19 != 9) %>%
-  filter(Depth < 200) #photic zone
+  filter(Depth < 50) #photic zone
+```
+
+```{r}
+#testing points across depths 
+pig_clean_alldepth = pig %>%
+  filter(QF_p4 != 9 | 
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9) %>%
+  mutate(year = year(ISO_DateTime_UTC)) %>%
+  filter(year >= 2003) %>%
+  filter(Depth < 50)
+
+ggplot(pig_clean_alldepth, aes(x = ISO_DateTime_UTC, y = Depth)) + geom_point() + scale_y_reverse()
+#y coord flip, 200 lim
+
+#the last 5 years and top 50 m
+
+pig_clean_200 = pig %>%
+  filter(Depth < 500) %>%
+  filter(QF_p4 != 9 | 
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9) %>%
+  mutate(year = year(ISO_DateTime_UTC)) %>%
+  filter(year >= 2003) #1198
+
+pig_clean_15 = pig %>%
+    filter(QF_p4 != 9 | 
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9) %>%
+  mutate(year = year(ISO_DateTime_UTC)) %>%
+  filter(year >= 2003) %>%
+  filter(Depth < 15) #597
+
+pig_clean_5 = pig %>%
+    filter(QF_p4 != 9 | 
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9) %>%
+  mutate(year = year(ISO_DateTime_UTC)) %>%
+  filter(year >= 2003) %>%
+  filter(Depth < 5) #258
+
+pig_clean_50 = pig %>%
+    filter(QF_p4 != 9 | 
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9) %>%
+  mutate(year = year(ISO_DateTime_UTC)) %>%
+  filter(year >= 2003) %>%
+filter(Depth < 50) #1198
 ```
 
 ```{r}
@@ -46,7 +124,7 @@ pig_clean_yd = pig_clean %>%
          day = day(ISO_DateTime_UTC),
          yd = yday(ISO_DateTime_UTC)) %>%
   select(ID, ISO_DateTime_UTC, yyyymmdd, decy, time, month, day, year, yd, Latitude, Longitude, Cruise_num, Cast, Cast_type, Bottle_number, Depth, p4, QF_p4, p5, QF_p5, p6, QF_p6, p7, QF_p7, p10, QF_p10, p13, QF_p13, p14, QF_p14, p19, QF_p19) %>%
-  filter(year >= 2014)
+  filter(year >= 2003)
 ```
 
 ```{r}
@@ -148,8 +226,9 @@ ggplot(pfts_ts_mgm3_long, aes(x = ISO_DateTime_UTC, y = ratio)) +
   geom_point(aes(color = pft)) +
   geom_line(aes(group = pft, color = pft)) +
   labs(title = 'pfts time series') + 
-  scale_x_datetime(date_breaks = '3 month',
+  scale_x_datetime(date_breaks = '6 month',
                    date_labels = '%B %Y') +
+  ylim(0, 1) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
 ```
 
@@ -168,6 +247,7 @@ ggplot(pfts_ts_mgm3_mhw, aes(x = ISO_DateTime_UTC, y = ratio)) +
   labs(title = 'pfts time series - heatwave', x = '2024') + 
   scale_x_datetime(date_breaks = '3 day',
                    date_labels = '%B %d') +
+  ylim(0, 1) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
 ```
 
@@ -245,6 +325,7 @@ pfts_month_long = pfts_month %>%
 ggplot(pfts_month_long, aes(x = month, y = ratio)) + 
   geom_point(aes(color = pft)) +
   geom_line(aes(group = pft, color = pft)) +
+  ylim(0, 1) +
   labs(title = 'pfts per month')
 ```
 
@@ -329,6 +410,7 @@ pfts_day_long = pfts_day %>%
 ggplot(pfts_day_long, aes(x = yd, y = ratio)) + 
   geom_point(aes(color = pft)) +
   geom_line(aes(group = pft, color = pft)) +
+  ylim(0, 1) +
   labs(title = 'pfts per day')
 ```
 ```{r}
@@ -346,9 +428,8 @@ ggplot() +
   geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill = 'lightgray', color = 'white') +
   geom_point(data = pig_clean_yd, aes(x = Longitude, y = Latitude), size = 0.25) +
   scale_shape_manual(values = c(2, 1)) +
-  coord_fixed(1.3, xlim = c(-70, -60), ylim = c(27, 35)) +
+  coord_fixed(1.3, xlim = c(-64.5, -64), ylim = c(31, 32)) +
   labs(title = 'BATS HPLC Pigment data', x = 'Longitude', y = 'Latitude') +
   theme_minimal()
-```
 ```
 
