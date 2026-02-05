@@ -14,7 +14,7 @@ library(gridExtra)
 ```
 
 ```{r}
-pigments = read_csv('893521_v9_bats_pigments.csv')
+pigments = read_csv('893521_v8_bats_pigments.csv')
 ```
 
 ```{r}
@@ -135,7 +135,7 @@ pig_clean_ts = pig_clean_yd %>%
   rename(peri = p4,
          but = p5,
          fuco = p6,
-         hexfuco = p7,
+         hex = p7,
          allo = p10,
          chlb = p13,
          chla = p14,
@@ -143,37 +143,22 @@ pig_clean_ts = pig_clean_yd %>%
   mutate(peri_mgm3 = peri*1025*0.000001,
          but_mgm3 = but*1025*0.000001,
          fuco_mgm3 = fuco*1025*0.000001,
-         hexfuco_mgm3 = hexfuco*1025*0.000001,
+         hex_mgm3 = hex*1025*0.000001,
          allo_mgm3 = allo*1025*0.000001,
          chlb_mgm3 = chlb*1025*0.000001,
          chla_mgm3 = chla*1025*0.000001,
-         zea_mgm3 = zea*1025*0.000001,
-         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
-  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3)))
-
-pig_clean_ts_long_ngkg = pig_clean_ts %>%
-  select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3, -chlaw_mgm3, -chla) %>%
-  pivot_longer(cols = 2:8,
-               names_to = 'pigment',
-               values_to = 'ng/kg')
+         zea_mgm3 = zea*1025*0.000001) %>%
+  mutate(totalDP_mgm3 = (1.41*(fuco_mgm3) + 1.41*(peri_mgm3) + 1.27*(hex_mgm3) + 0.6*(allo_mgm3) + 0.35*(but_mgm3) + 1.01*(chlb_mgm3)))
 
 pig_clean_ts_long_mgm3 = pig_clean_ts %>%
-  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea, -chlaw_mgm3, -chla_mgm3) %>%
-  pivot_longer(cols = 2:9,
+  select(-peri, -but, -fuco, -hex, -allo, -chlb, -chla, -zea, -totalDP_mgm3, -chla_mgm3) %>%
+  pivot_longer(cols = 2:8,
                names_to = 'pigment',
                values_to = 'mg/m3')
 ```
 
 ```{r}
-#plot pigment time series
-ggplot(pig_clean_ts_long_ngkg, aes(x = ISO_DateTime_UTC, y = `ng/kg`)) + 
-  geom_point(aes(color = pigment)) +
-  geom_line(aes(group = pigment, color = pigment)) +
-  labs(title = 'pigments ng/kg') + 
-  scale_x_datetime(
-    date_breaks = "2 month",       # monthly ticks
-    date_labels = "%b %Y"          # e.g., "Aug 2016"
-  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 5))
+#plot pigment time series)
 ggplot(pig_clean_ts_long_mgm3, aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
   geom_point(aes(color = pigment)) +
   geom_line(aes(group = pigment, color = pigment)) +
@@ -202,21 +187,21 @@ ggplot(ts_mgm3_mhw, aes(x = ISO_DateTime_UTC, y = `mg/m3`)) +
                    date_labels = '%B %d') +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8))
 ```
+
 ```{r}
 #pfts for ts
 pfts_ts_mgm3 = pig_clean_ts %>%
-  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea) %>%
-  mutate(fproka = ((2.36*pig_clean_ts$zea_mgm3)/pig_clean_ts$chlaw_mgm3),
-         fgreenalgae = ((1.30*pig_clean_ts$chlb_mgm3)/pig_clean_ts$chlaw_mgm3)) %>%
-  mutate(fnano = case_when(
-    pig_clean_ts$chla_mgm3 > 0.08 & pig_clean_ts$chla_mgm3 < 2 ~ ((1.07*pig_clean_ts$hexfuco_mgm3+2.06*pig_clean_ts$allo_mgm3+1.30*pig_clean_ts$chlb_mgm3+1.27*pig_clean_ts$fuco_nano_mgm3)/pig_clean_ts$chlaw_mgm3),
-    pig_clean_ts$chla_mgm3 <= 0.08 ~ ((12.5*pig_clean_ts$chla_mgm3*1.07*pig_clean_ts$hexfuco_mgm3)/pig_clean_ts$chlaw_mgm3)+(((1.07*pig_clean_ts$hexfuco_mgm3)+(2.06*pig_clean_ts$allo_mgm3)+(1.30*pig_clean_ts$chlb_mgm3))/pig_clean_ts$chlaw_mgm3)+((1.27*pig_clean_ts$fuco_nano_mgm3)/pig_clean_ts$chlaw_mgm3)),
-         fhapto = fnano-fgreenalgae,
-    fdiatoms = (1.27*(pig_clean_ts$fuco_mgm3-pig_clean_ts$fuco_nano_mgm3))/pig_clean_ts$chlaw_mgm3)
+  select(-peri, -but, -fuco, -hex, -allo, -chlb, -chla, -zea) %>%
+  mutate(microplankton = ((1.41*(fuco_mgm3 + peri_mgm3))/totalDP_mgm3),
+         diatoms = ((1.41*(fuco_mgm3))/totalDP_mgm3),
+         dinoflagellates = ((1.41*(peri_mgm3))/totalDP_mgm3),
+         nanoplankton = (((1.27*(hex_mgm3))+(1.01*(chlb_mgm3))+(0.35*(but_mgm3))+(0.6*(allo_mgm3)))/totalDP_mgm3),
+         green_algae = ((1.01*(chlb_mgm3))),
+         picoplankton = (((0.86*(zea_mgm3))+(1.27*(hex_mgm3)))/totalDP_mgm3))
 
 pfts_ts_mgm3_long = pfts_ts_mgm3 %>%
-  select(ISO_DateTime_UTC, fproka, fgreenalgae, fhapto, fdiatoms) %>% #no longer selecting fnano
-  pivot_longer(cols = 2:5,
+  select(ISO_DateTime_UTC, microplankton, diatoms, dinoflagellates, nanoplankton, green_algae, picoplankton) %>% #no longer selecting fnano
+  pivot_longer(cols = 2:7,
                names_to = 'pft',
                values_to = 'ratio')
 ```
@@ -276,7 +261,7 @@ pig_clean_month = pig_clean_yd %>%
   rename(peri = p4,
          but = p5,
          fuco = p6,
-         hexfuco = p7,
+         hex = p7,
          allo = p10,
          chlb = p13,
          chla = p14,
@@ -284,24 +269,17 @@ pig_clean_month = pig_clean_yd %>%
   mutate(peri_mgm3 = peri*1025*0.000001,
          but_mgm3 = but*1025*0.000001,
          fuco_mgm3 = fuco*1025*0.000001,
-         hexfuco_mgm3 = hexfuco*1025*0.000001,
+         hex_mgm3 = hex*1025*0.000001,
          allo_mgm3 = allo*1025*0.000001,
          chlb_mgm3 = chlb*1025*0.000001,
          chla_mgm3 = chla*1025*0.000001,
-         zea_mgm3 = zea*1025*0.000001,
-         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
-  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) #but is not included because it was excluded after multiple regression analyses in the losa supplement
+         zea_mgm3 = zea*1025*0.000001) %>%
+  mutate(totalDP_mgm3 = (1.41*(fuco_mgm3) + 1.41*(peri_mgm3) + 1.27*(hex_mgm3) + 0.6*(allo_mgm3) + 0.35*(but_mgm3) + 1.01*(chlb_mgm3)))
 ```
 
 ```{r}
-pig_clean_month_long_ngkg = pig_clean_month %>%
-  select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3) %>%
-  pivot_longer(cols = 2:9,
-               names_to = 'pigment',
-               values_to = 'ng/kg')
-
 pig_clean_month_long_mgm3 = pig_clean_month %>%
-  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea) %>%
+  select(-peri, -but, -fuco, -hex, -allo, -chlb, -chla, -zea) %>%
   pivot_longer(cols = 2:10,
                names_to = 'pigment',
                values_to = 'mg/m3')
@@ -309,10 +287,6 @@ pig_clean_month_long_mgm3 = pig_clean_month %>%
 
 ```{r}
 #pigment monthly climatology
-ggplot(pig_clean_month_long_ngkg, aes(x = month, y = `ng/kg`)) + 
-  geom_point(aes(color = pigment)) +
-  geom_line(aes(group = pigment, color = pigment)) +
-  labs(title = 'pigments ng/kg')
 ggplot(pig_clean_month_long_mgm3, aes(x = month, y = `mg/m3`)) + 
   geom_point(aes(color = pigment)) +
   geom_line(aes(group = pigment, color = pigment)) +
@@ -322,11 +296,7 @@ ggplot(pig_clean_month_long_mgm3, aes(x = month, y = `mg/m3`)) +
 ```{r}
 pfts_month = pig_clean_month %>%
   select(month) %>%
-  mutate(fproka = ((2.36*pig_clean_month$zea_mgm3)/pig_clean_month$chlaw_mgm3),
-         fgreenalgae = ((1.30*pig_clean_month$chlb_mgm3)/pig_clean_month$chlaw_mgm3),
-         fnano = ((1.07*pig_clean_month$hexfuco_mgm3+2.06*pig_clean_month$allo_mgm3+1.30*pig_clean_month$chlb_mgm3+1.27*pig_clean_month$fuco_nano_mgm3)/pig_clean_month$chlaw_mgm3),
-         fhapto = fnano-fgreenalgae,
-         fdiatoms = (1.27*(pig_clean_month$fuco_mgm3-pig_clean_month$fuco_nano_mgm3))/pig_clean_month$chlaw_mgm3) 
+  mutate() 
 ```
 
 ```{r}
@@ -354,7 +324,7 @@ pig_clean_day = pig_clean_yd %>%
   rename(peri = p4,
          but = p5,
          fuco = p6,
-         hexfuco = p7,
+         hex = p7,
          allo = p10,
          chlb = p13,
          chla = p14,
@@ -362,24 +332,17 @@ pig_clean_day = pig_clean_yd %>%
   mutate(peri_mgm3 = peri*1025*0.000001,
          but_mgm3 = but*1025*0.000001,
          fuco_mgm3 = fuco*1025*0.000001,
-         hexfuco_mgm3 = hexfuco*1025*0.000001,
+         hex_mgm3 = hex*1025*0.000001,
          allo_mgm3 = allo*1025*0.000001,
          chlb_mgm3 = chlb*1025*0.000001,
          chla_mgm3 = chla*1025*0.000001,
-         zea_mgm3 = zea*1025*0.000001,
-         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
-  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) #but is not included because it was excluded after multiple regression analyses in the losa supplement
+         zea_mgm3 = zea*1025*0.000001) %>%
+  mutate(totalDP_mgm3 = (1.41*(fuco_mgm3) + 1.41*(peri_mgm3) + 1.27*(hex_mgm3) + 0.6*(allo_mgm3) + 0.35*(but_mgm3) + 1.01*(chlb_mgm3)))
 ```
 
 ```{r}
-pig_clean_day_long_ngkg = pig_clean_day %>%
-  select(-peri_mgm3, -but_mgm3, -fuco_mgm3, -hexfuco_mgm3, -allo_mgm3, -chlb_mgm3, -chla_mgm3, -zea_mgm3, -fuco_nano_mgm3) %>%
-  pivot_longer(cols = 2:9,
-               names_to = 'pigment',
-               values_to = 'ng/kg')
-
 pig_clean_day_long_mgm3 = pig_clean_day %>%
-  select(-peri, -but, -fuco, -hexfuco, -allo, -chlb, -chla, -zea) %>%
+  select(-peri, -but, -fuco, -hex, -allo, -chlb, -chla, -zea) %>%
   pivot_longer(cols = 2:10,
                names_to = 'pigment',
                values_to = 'mg/m3')
@@ -387,10 +350,6 @@ pig_clean_day_long_mgm3 = pig_clean_day %>%
 
 ```{r}
 #pigment daily climatology
-ggplot(pig_clean_day_long_ngkg, aes(x = yd, y = `ng/kg`)) + 
-  geom_point(aes(color = pigment)) +
-  geom_line(aes(group = pigment, color = pigment)) +
-  labs(title = 'pigments ng/kg')
 ggplot(pig_clean_day_long_mgm3, aes(x = yd, y = `mg/m3`)) + 
   geom_point(aes(color = pigment)) +
   geom_line(aes(group = pigment, color = pigment)) +
@@ -400,16 +359,7 @@ ggplot(pig_clean_day_long_mgm3, aes(x = yd, y = `mg/m3`)) +
 ```{r}
 pfts_day = pig_clean_day %>%
   select(yd) %>%
-  mutate(fproka = ((2.36*pig_clean_day$zea_mgm3)/pig_clean_day$chlaw_mgm3),
-         fgreenalgae = ((1.30*pig_clean_day$chlb_mgm3)/pig_clean_day$chlaw_mgm3)) %>%
-#pig_clean_day$chla_mgm3 >= 2 all results in FALSE
-#pig_clean_day$chla_mgm3 > 0.08 & pig_clean_day$chla_mgm3 < 2 results in mostly TRUE some FALSE meaning I use the S6 equation for those
-#pig_clean_day$chla_mgm3 <= 0.08 results in mostly FALSE with some TRUE so I use S7
-  mutate(fnano = case_when(
-    pig_clean_day$chla_mgm3 > 0.08 & pig_clean_day$chla_mgm3 < 2 ~ ((1.07*pig_clean_day$hexfuco_mgm3+2.06*pig_clean_day$allo_mgm3+1.30*pig_clean_day$chlb_mgm3+1.27*pig_clean_day$fuco_nano_mgm3)/pig_clean_day$chlaw_mgm3),
-    pig_clean_day$chla_mgm3 <= 0.08 ~ ((12.5*pig_clean_day$chla_mgm3*1.07*pig_clean_day$hexfuco_mgm3)/pig_clean_day$chlaw_mgm3)+(((1.07*pig_clean_day$hexfuco_mgm3)+(2.06*pig_clean_day$allo_mgm3)+(1.30*pig_clean_day$chlb_mgm3))/pig_clean_day$chlaw_mgm3)+((1.27*pig_clean_day$fuco_nano_mgm3)/pig_clean_day$chlaw_mgm3)),
-         fhapto = fnano-fgreenalgae,
-    fdiatoms = (1.27*(pig_clean_day$fuco_mgm3-pig_clean_day$fuco_nano_mgm3))/pig_clean_day$chlaw_mgm3)
+  mutate()
 
 #diatom equation used is S10 because all chla is lower than 2 mg/m3
 ```
@@ -429,6 +379,7 @@ ggplot(pfts_day_long, aes(x = yd, y = ratio)) +
   ylim(0, 1) +
   labs(title = 'pfts per day')
 ```
+
 ```{r}
 library(maps)
 library(ggrepel)
