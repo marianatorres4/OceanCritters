@@ -1,0 +1,434 @@
+---
+title: "BATS_Pigments_Heatwaves_OISST8_StackedBars"
+author: "Jill Paquette"
+date: "2026-03-12"
+output: html_document
+---
+
+---
+title: "BATS_Pigments_Heatwaves_OISST8"
+author: "Jill Paquette"
+date: "2026-02-05"
+output: html_document
+---
+
+```{r}
+#load in libraries
+library(tidyverse)
+library(lubridate)
+```
+
+```{r}
+#load in bats data - now updated thru june 2025
+pigments = read_csv('893521_v9_bats_pigments.csv')
+```
+
+```{r}
+#choose desired columns
+pig = pigments %>%
+  select(ID, ISO_DateTime_UTC, yyyymmdd, decy, time, Latitude, Longitude, Cruise_num, Cast, Cast_type, Bottle_number, Depth, QF_depth, p4, QF_p4, p5, QF_p5, p6, QF_p6, p7, QF_p7, p10, QF_p10, p13, QF_p13, p14, QF_p14, p19, QF_p19)
+```
+
+```{r}
+#filter general dataset to be just good data at desired depth (<15 m)
+pig_clean = pig %>%
+  filter(QF_p4 != 9 | #remove bad quality data
+           QF_p4 != 9 |
+           QF_p5 != 9 |
+           QF_p6 != 9 |
+           QF_p7 != 9 |
+           QF_p10 != 9 |
+           QF_p13 != 9 |
+           QF_p14 != 9 |
+           QF_p19 != 9) %>%
+  filter(Depth <= 15) %>% #filter to less than 15 m
+  mutate(year = year(ISO_DateTime_UTC), #add metadata columns
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select(ID, ISO_DateTime_UTC, yyyymmdd, decy, time, month, day, year, yd, Latitude, Longitude, Cruise_num, Cast, Cast_type, Bottle_number, Depth, p4, QF_p4, p5, QF_p5, p6, QF_p6, p7, QF_p7, p10, QF_p10, p13, QF_p13, p14, QF_p14, p19, QF_p19)
+```
+
+```{r}
+pig_ts = pig_clean %>%
+ group_by(ISO_DateTime_UTC) %>%
+  summarize(across(starts_with('p'), \(x) mean(x, na.rm = TRUE))) %>%
+  rename(peri_ngkg = p4,
+         but_ngkg = p5,
+         fuco_ngkg = p6,
+         hexfuco_ngkg = p7,
+         allo_ngkg = p10,
+         chlb_ngkg = p13,
+         chla_ngkg = p14,
+         zea_ngkg = p19) %>%
+  mutate(peri_mgm3 = peri_ngkg*1025*0.000001,
+         but_mgm3 = but_ngkg*1025*0.000001,
+         fuco_mgm3 = fuco_ngkg*1025*0.000001,
+         hexfuco_mgm3 = hexfuco_ngkg*1025*0.000001,
+         allo_mgm3 = allo_ngkg*1025*0.000001,
+         chlb_mgm3 = chlb_ngkg*1025*0.000001,
+         chla_mgm3 = chla_ngkg*1025*0.000001,
+         zea_mgm3 = zea_ngkg*1025*0.000001,
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
+  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) %>%
+  mutate(year = year(ISO_DateTime_UTC), #add metadata columns
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select(ISO_DateTime_UTC, year, month, day, yd, everything()) %>%
+  mutate(across(where(is.numeric), ~replace(., is.nan(.), NA)))
+```
+
+```{r}
+#choose just mgm3 pigments and pivot longer for plotting
+pig_ts_long = pig_ts %>%
+  select(-peri_ngkg, -but_ngkg, -fuco_ngkg, -hexfuco_ngkg, -allo_ngkg, -chlb_ngkg, -chla_ngkg, -zea_ngkg, -chlaw_mgm3) %>%
+  select(ISO_DateTime_UTC, year, month, day, yd, chla_mgm3, peri_mgm3, but_mgm3, fuco_mgm3, hexfuco_mgm3, allo_mgm3, chlb_mgm3, zea_mgm3, fuco_nano_mgm3) %>%
+  pivot_longer(cols = 6:14,
+               names_to = 'pigment',
+               values_to = 'mg/m3') 
+```
+
+```{r}
+#plot time series of pigments
+ggplot(pig_ts_long, aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - time series') + 
+  scale_x_datetime(
+    date_breaks = "9 month",       
+    date_labels = "%b %Y"          #show as eg "Aug 2016"
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 5))
+```
+
+```{r}
+#pfts for ts
+pfts_ts = pig_ts %>%
+  select(-peri_ngkg, -but_ngkg, -fuco_ngkg, -hexfuco_ngkg, -allo_ngkg, -chlb_ngkg, -chla_ngkg, -zea_ngkg) %>%
+  mutate(fproka = ((2.36*pig_ts$zea_mgm3)/pig_ts$chlaw_mgm3),
+         fgreenalgae = ((1.30*pig_ts$chlb_mgm3)/pig_ts$chlaw_mgm3)) %>%
+  mutate(fnano = case_when(
+    pig_ts$chla_mgm3 > 0.08 & pig_ts$chla_mgm3 < 2 ~ ((1.07*pig_ts$hexfuco_mgm3+2.06*pig_ts$allo_mgm3+1.30*pig_ts$chlb_mgm3+1.27*pig_ts$fuco_nano_mgm3)/pig_ts$chlaw_mgm3),
+    pig_ts$chla_mgm3 <= 0.08 ~ ((12.5*pig_ts$chla_mgm3*1.07*pig_ts$hexfuco_mgm3)/pig_ts$chlaw_mgm3)+(((1.07*pig_ts$hexfuco_mgm3)+(2.06*pig_ts$allo_mgm3)+(1.30*pig_ts$chlb_mgm3))/pig_ts$chlaw_mgm3)+((1.27*pig_ts$fuco_nano_mgm3)/pig_ts$chlaw_mgm3)),
+         fhapto = fnano-fgreenalgae,
+    fdiatoms = (1.27*(pig_ts$fuco_mgm3-pig_ts$fuco_nano_mgm3))/pig_ts$chlaw_mgm3) %>%
+  mutate(year = year(ISO_DateTime_UTC), #add metadata columns
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select(ISO_DateTime_UTC, year, month, day, yd, everything()) %>%
+  mutate(across(where(is.numeric), ~replace(., is.nan(.), NA)))
+```
+
+```{r}
+#pivot longer for plotting
+pfts_ts_long = pfts_ts %>%
+  select(ISO_DateTime_UTC, year, month, day, yd, fproka, fgreenalgae, fhapto, fdiatoms) %>%
+  pivot_longer(cols = 6:9, names_to = 'pft', values_to = 'ratio')
+
+pfts_ts_long_agg = pfts_ts_long %>%
+  group_by(year, pft) %>%
+  filter(!is.na(ratio)) %>%
+  summarize(ratio_sum = sum(ratio), .groups = 'drop')
+```
+
+```{r}
+#plot pfts time series
+ggplot(pfts_ts_long_agg, aes(x = year, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - time series')
+```
+
+```{r}
+#create df for monthly climatology
+pig_ts_month = pig_clean %>%
+ group_by(month) %>%
+  summarize(across(starts_with('p'), \(x) mean(x, na.rm = TRUE))) %>%
+  rename(peri_ngkg = p4,
+         but_ngkg = p5,
+         fuco_ngkg = p6,
+         hexfuco_ngkg = p7,
+         allo_ngkg = p10,
+         chlb_ngkg = p13,
+         chla_ngkg = p14,
+         zea_ngkg = p19) %>%
+  mutate(peri_mgm3 = peri_ngkg*1025*0.000001,
+         but_mgm3 = but_ngkg*1025*0.000001,
+         fuco_mgm3 = fuco_ngkg*1025*0.000001,
+         hexfuco_mgm3 = hexfuco_ngkg*1025*0.000001,
+         allo_mgm3 = allo_ngkg*1025*0.000001,
+         chlb_mgm3 = chlb_ngkg*1025*0.000001,
+         chla_mgm3 = chla_ngkg*1025*0.000001,
+         zea_mgm3 = zea_ngkg*1025*0.000001,
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
+  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) %>%
+  select(month, everything())
+
+pig_ts_month_long = pig_ts_month %>%
+  select(-peri_ngkg, -but_ngkg, -fuco_ngkg, -hexfuco_ngkg, -allo_ngkg, -chlb_ngkg, -chla_ngkg, -zea_ngkg, -chlaw_mgm3) %>%
+  select(month, chla_mgm3, peri_mgm3, but_mgm3, fuco_mgm3, hexfuco_mgm3, allo_mgm3, chlb_mgm3, zea_mgm3, fuco_nano_mgm3) %>%
+  pivot_longer(cols = 2:10,
+               names_to = 'pigment',
+               values_to = 'mg/m3')
+```
+
+```{r}
+#monthly climatology - pigments
+ggplot(pig_ts_month_long, aes(x = month, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - climatology') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+```
+```{r}
+pfts_ts_month = pig_ts_month %>%
+  select(-peri_ngkg, -but_ngkg, -fuco_ngkg, -hexfuco_ngkg, -allo_ngkg, -chlb_ngkg, -chla_ngkg, -zea_ngkg) %>%
+  mutate(fproka = ((2.36*pig_ts_month$zea_mgm3)/pig_ts_month$chlaw_mgm3),
+         fgreenalgae = ((1.30*pig_ts_month$chlb_mgm3)/pig_ts_month$chlaw_mgm3)) %>%
+  mutate(fnano = case_when(
+    pig_ts_month$chla_mgm3 > 0.08 & pig_ts_month$chla_mgm3 < 2 ~ ((1.07*pig_ts_month$hexfuco_mgm3+2.06*pig_ts_month$allo_mgm3+1.30*pig_ts_month$chlb_mgm3+1.27*pig_ts_month$fuco_nano_mgm3)/pig_ts_month$chlaw_mgm3),
+    pig_ts_month$chla_mgm3 <= 0.08 ~ ((12.5*pig_ts_month$chla_mgm3*1.07*pig_ts_month$hexfuco_mgm3)/pig_ts_month$chlaw_mgm3)+(((1.07*pig_ts_month$hexfuco_mgm3)+(2.06*pig_ts_month$allo_mgm3)+(1.30*pig_ts_month$chlb_mgm3))/pig_ts_month$chlaw_mgm3)+((1.27*pig_ts_month$fuco_nano_mgm3)/pig_ts_month$chlaw_mgm3)),
+         fhapto = fnano-fgreenalgae,
+    fdiatoms = (1.27*(pig_ts_month$fuco_mgm3-pig_ts_month$fuco_nano_mgm3))/pig_ts_month$chlaw_mgm3) %>%
+  select(month, fproka, fgreenalgae, fdiatoms, fhapto)
+
+pfts_ts_month_long = pfts_ts_month %>%
+  pivot_longer(cols = starts_with('f'),
+               names_to = 'pft',
+               values_to = 'ratio')
+
+pft_ts_month_long_agg = pfts_ts_month_long %>%
+  group_by(month, pft) %>%
+  filter(!is.na(ratio)) %>%
+  summarize(ratio_sum = sum(ratio), .groups = 'drop')
+```
+
+```{r}
+#monthly climatology - pfts
+ggplot(pft_ts_month_long_agg, aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - climatology') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+```
+
+
+```{r}
+#just years with heatwaves aligning with OISST_8
+pig_mhw = pig_ts %>%
+    mutate(year = year(ISO_DateTime_UTC),
+         month = month(ISO_DateTime_UTC),
+         week = week(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select(ISO_DateTime_UTC, year, month, week, day, yd, everything()) %>%
+  filter(year == 2014 | year == 2015 | year == 2016 | 
+           year == 2017 | year == 2018 | year == 2019 | year == 2022)
+```
+
+```{r}
+#pivot longer for plotting
+pig_mhw_long = pig_mhw %>%
+  select(-peri_ngkg, -but_ngkg, -fuco_ngkg, -hexfuco_ngkg, -allo_ngkg, -chlb_ngkg, -chla_ngkg, -zea_ngkg, -chlaw_mgm3) %>%
+  select(ISO_DateTime_UTC, year, month, week, day, yd, chla_mgm3, peri_mgm3, but_mgm3, fuco_mgm3, hexfuco_mgm3, allo_mgm3, chlb_mgm3, zea_mgm3, fuco_nano_mgm3) %>%
+  pivot_longer(cols = 7:15, names_to = 'pigment', values_to = 'mg/m3')
+```
+
+```{r}
+#all years with heatwave overlap - pigment
+ggplot(pig_mhw_long, aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - all heatwave years') + 
+  scale_x_datetime(
+    date_breaks = "3 month",       #monthly ticks
+    date_labels = "%b %Y"          #show as eg "Aug 2016"
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+```
+
+```{r}
+#pfts heatwaves
+pfts_mhw = pfts_ts %>%
+    mutate(year = year(ISO_DateTime_UTC),
+         month = month(ISO_DateTime_UTC),
+         day = day(ISO_DateTime_UTC),
+         week = week(ISO_DateTime_UTC),
+         yd = yday(ISO_DateTime_UTC)) %>%
+  select(ISO_DateTime_UTC, year, month, week, day, yd, everything()) %>%
+  filter(year == 2014 | year == 2015 | year == 2016 | 
+           year == 2017 | year == 2018 | year == 2019 | year == 2022)
+
+pfts_mhw_long = pfts_mhw %>%
+  select(ISO_DateTime_UTC, year, month, week, day, yd, fproka, fgreenalgae, fhapto, fdiatoms) %>%
+  pivot_longer(cols = 7:10, names_to = 'pft', values_to = 'ratio')
+
+pfts_mhw_long_agg = pfts_mhw_long %>%
+  group_by(year, month, week, day, yd, pft) %>%
+  filter(!is.na(ratio)) %>%
+  summarize(ratio_sum = sum(ratio), .groups = 'drop')
+```
+
+```{r}
+#all years with heatwave overlap - pft
+ggplot(pfts_mhw_long_agg, aes(x = year, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - all heatwave years') + 
+  scale_x_continuous(breaks = c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022))
+```
+
+```{r}
+#2014 only
+ggplot(pig_mhw_long %>% filter(year == 2014), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2014, heatwave 03/10-03/18') + 
+  scale_x_datetime(
+    date_breaks = "1 week",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2014), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2014, heatwave 03/10-03/18')  + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2014), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2014, heatwave 03/10-03/18')  + 
+  xlim(1, 366)
+```
+
+```{r}
+#2015 only
+ggplot(pig_mhw_long %>% filter(year == 2015), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2015, heatwave 04/09-04/22 and 07/01-07/11') + 
+  scale_x_datetime(
+    date_breaks = "1 week",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2015), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2015, heatwave 04/09-04/22 and 07/01-07/11') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2015), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2015, heatwave 04/09-04/22 and 07/01-07/11') + 
+  xlim(1, 366)
+```
+
+```{r}
+#2016 only
+ggplot(pig_mhw_long %>% filter(year == 2016), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2016',
+       subtitle = 'heatwave 03/10-03/17, 03/26-04/08, 07/28-08/10, 08/28-09/23') + 
+  scale_x_datetime(
+    date_breaks = "1 month",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2016), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2016',
+    subtitle = 'heatwave 03/10-03/17, 03/26-04/08, 07/28-08/10, 08/28-09/23') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2016), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2016',
+    subtitle = 'heatwave 03/10-03/17, 03/26-04/08, 07/28-08/10, 08/28-09/23') + 
+  xlim(1, 366)
+```
+
+```{r}
+#2017 only
+ggplot(pig_mhw_long %>% filter(year == 2017), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2017, heatwave 04/28-05/05') + 
+  scale_x_datetime(
+    date_breaks = "1 week",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2017), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2017, heatwave 04/28-05/05') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2017), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2017, heatwave 04/28-05/05') + 
+  xlim(1, 366)
+```
+
+```{r}
+#2018 only
+ggplot(pig_mhw_long %>% filter(year == 2018), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2018, heatwave 05/06-06/12') + 
+  scale_x_datetime(
+    date_breaks = "1 week",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2018), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2018, heatwave 05/06-06/12') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2018), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2018, heatwave 05/06-06/12') + 
+  xlim(1, 366)
+```
+
+```{r}
+#2019 only
+ggplot(pig_mhw_long %>% filter(year == 2019), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2019, heatwave 04/24-05/12') + 
+  scale_x_datetime(
+    date_breaks = "1 week",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2019), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2019, heatwave 04/24-05/12') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2019), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2019, heatwave 04/24-05/12') + 
+  xlim(1, 366)
+```
+
+```{r}
+#2022 only
+ggplot(pig_mhw_long %>% filter(year == 2022), aes(x = ISO_DateTime_UTC, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - 2022, heatwave 11/28-12/13') + 
+  scale_x_datetime(
+    date_breaks = "1 week",       
+    date_labels = "%b %d"          #show as abbreviated month and day
+  ) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2022), aes(x = month, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2022, heatwave 11/28-12/13') + 
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+ggplot(pfts_mhw_long_agg %>% filter(year == 2022), aes(x = yd, y = ratio_sum, fill = pft)) + 
+  geom_bar(stat = 'identity', position = 'stack') +
+  labs(title = 'pfts - 2022, heatwave 11/28-12/13') + 
+  xlim(1, 366)
+```
+
