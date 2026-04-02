@@ -129,6 +129,7 @@ ggplot(pfts_ts_long, aes(x = ISO_DateTime_UTC, y = ratio)) +
   ylim(0, 1) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 5))
 ```
+
 ```{r}
 #create df for monthly climatology
 pig_ts_month = pig_clean %>%
@@ -196,6 +197,104 @@ ggplot(pfts_ts_month_long, aes(x = month, y = ratio)) +
   labs(title = 'pfts - climatology') + 
   ylim(0, 1) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+```
+
+```{r}
+#deacadal trends - pigments
+pig_ts_decadal = pig_clean %>%
+ group_by(month, year) %>%
+  summarize(across(starts_with('p'), \(x) mean(x, na.rm = TRUE))) %>%
+  rename(peri_ngkg = p4,
+         but_ngkg = p5,
+         fuco_ngkg = p6,
+         hexfuco_ngkg = p7,
+         allo_ngkg = p10,
+         chlb_ngkg = p13,
+         chla_ngkg = p14,
+         zea_ngkg = p19) %>%
+  mutate(peri_mgm3 = peri_ngkg*1025*0.000001,
+         but_mgm3 = but_ngkg*1025*0.000001,
+         fuco_mgm3 = fuco_ngkg*1025*0.000001,
+         hexfuco_mgm3 = hexfuco_ngkg*1025*0.000001,
+         allo_mgm3 = allo_ngkg*1025*0.000001,
+         chlb_mgm3 = chlb_ngkg*1025*0.000001,
+         chla_mgm3 = chla_ngkg*1025*0.000001,
+         zea_mgm3 = zea_ngkg*1025*0.000001,
+         fuco_nano_mgm3 = (hexfuco_mgm3^0.098)*(but_mgm3^1.284)) %>%
+  mutate(chlaw_mgm3 = ((1.27*fuco_mgm3) + (2.43*peri_mgm3) + (1.07*hexfuco_mgm3) + (2.06*allo_mgm3) + (1.30*chlb_mgm3) + (2.36*zea_mgm3))) %>%
+  select(month, everything())
+
+pig_ts_decadal_long = pig_ts_decadal %>%
+  select(-peri_ngkg, -but_ngkg, -fuco_ngkg, -hexfuco_ngkg, -allo_ngkg, -chlb_ngkg, -chla_ngkg, -zea_ngkg, -chlaw_mgm3) %>%
+  select(month, year, chla_mgm3, peri_mgm3, but_mgm3, fuco_mgm3, hexfuco_mgm3, allo_mgm3, chlb_mgm3, zea_mgm3, fuco_nano_mgm3) %>%
+  pivot_longer(cols = 3:10,
+               names_to = 'pigment',
+               values_to = 'mg/m3')
+
+ggplot(pig_ts_decadal_long, aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+ggplot(pig_ts_decadal_long %>% filter(pigment != 'chla_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'allo_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, allo') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#F8766D'))
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'but_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, but') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#CD9600')) 
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'chla_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, chla') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#7CAE00'))
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'chlb_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, chlb') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#00BE67'))
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'fuco_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, fuco') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#00C19A'))
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'hexfuco_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, hexfuco') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#00B8E7'))
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'peri_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, peri') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#8494FF'))
+ggplot(pig_ts_decadal_long %>% filter(pigment == 'zea_mgm3'), aes(x = year, y = `mg/m3`)) + 
+  geom_point(aes(color = pigment)) +
+  geom_line(aes(group = pigment, color = pigment)) +
+  labs(title = 'pigments mg/m3 - decadal, zea') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  scale_color_manual(values = c('#FF68A1'))
+```
+
+```{r}
+#decadal trends - pfts
+#not sure how to do this one
 ```
 
 
